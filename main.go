@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"loxilb.io/loxilb-ingress-manager/managers"
+	"loxilb.io/loxilb-ingress-manager/pkg"
 
 	loxiapi "github.com/loxilb-io/kube-loxilb/pkg/api"
 	//+kubebuilder:scaffold:imports
@@ -107,4 +108,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+
+	go pkg.SpawnLoxiLB()
 }
