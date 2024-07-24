@@ -18,6 +18,7 @@ package pkg
 
 import (
 	"fmt"
+	"k8s.io/klog/v2"
 	"os/exec"
 	"time"
 )
@@ -31,9 +32,10 @@ func SpawnLoxiLB() {
 
 		command := fmt.Sprintf("%s --blacklist=eth0", LoxiLBImg)
 		cmd := exec.Command("bash", "-c", command)
+		klog.Infof("Spawning loxilb: %s", cmd)
 		err := cmd.Run()
 		if err != nil {
-			fmt.Println(err)
+			klog.Infof("Spawning loxilb failed: %s", err)
 		}
 		time.Sleep(3000 * time.Millisecond)
 	}

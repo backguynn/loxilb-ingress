@@ -87,9 +87,11 @@ func main() {
 		// LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
+		setupLog.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
+
+	go pkg.SpawnLoxiLB()
 
 	if loxilbIngressIP == "127.0.0.1" {
 		myIP, _ := pkg.GetLocalNonLoopBackIP()
@@ -131,6 +133,4 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-
-	go pkg.SpawnLoxiLB()
 }
