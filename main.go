@@ -75,6 +75,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	if loxilbIngressIP == "127.0.0.1" {
+		myIP, _ := pkg.GetLocalNonLoopBackIP()
+		if myIP != "" {
+			loxilbIngressIP = myIP
+		}
+	}
+
 	loxiLBLiveCh := make(chan *loxiapi.LoxiClient)
 	loxiLBDeadCh := make(chan struct{})
 	loxiLBUrl := fmt.Sprintf("http://%s:11111", loxilbIngressIP)
