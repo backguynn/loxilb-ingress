@@ -1,3 +1,12 @@
+FROM golang:1.22-alpine as builder
+
+RUN apk update && apk add git && apk add make
+
+WORKDIR /usr/src/app
+COPY . .
+
+RUN make build
+
 FROM ghcr.io/loxilb-io/loxilb:latest
 
 LABEL name="loxilb-ingress-manager" \
@@ -9,6 +18,7 @@ LABEL name="loxilb-ingress-manager" \
       maintainer="backguyn@netlox.io"
 
 WORKDIR /bin/
-COPY ./bin/loxilb-ingress /bin/loxilb-ingress
+COPY --from=builder /usr/src/app/bin/loxilb-ingress /bin/loxilb-ingress
+
 USER root
 RUN chmod +x /bin/loxilb-ingress

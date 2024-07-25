@@ -5,7 +5,7 @@ TAG?=latest
 build:
 	@mkdir -p ./bin
 	go mod tidy
-	go build -o ./bin/${bin} -ldflags="-X 'main.BuildInfo=${shell date '+%Y_%m_%d'}-${shell git branch --show-current}-$(shell git show --pretty=format:%h --no-patch)'" .
+	go build -o ./bin/loxilb-ingress -ldflags="-X 'main.BuildInfo=${shell date '+%Y_%m_%d'}-${shell git branch --show-current}-$(shell git show --pretty=format:%h --no-patch)'" .
 
 clean:
 	go clean .
