@@ -11,6 +11,9 @@ In Kubernetes, there is usually a lot of overlap between network load-balancer a
 
 When using Ingress, the clients connect to one of the pods through Ingress. The clients first perform a DNS lookup which returns IP address of the ingress. This IP address is usually funnelled through a L4 Load-balancer. The client sends a HTTP(s) request to Ingress specifying URL, hostname and other HTTP headers. Based on the HTTP payload, the ingress finds an associated Service and its EndPoint Objects. The Ingress then forwards the client's request to appopriate pod. It can also serve as HTTS termination point or as a mTLS hub.
 
+![image](https://github.com/user-attachments/assets/b8d0f0a0-c298-492e-8647-7c5936a87ea9)
+
+
 With Kubernetes ingress, we can expose multiple paths with the same service IP. This might be helpful if one is using public cloud, where one has to pay for managed LB services. Hence, creating a single service and exposing mulitple URL paths might be optimal in such use-cases.
 
 loxilb-ingress is optimized for cases which require long-lived connections and https termination with eBPF.
