@@ -252,6 +252,9 @@ spec:
       serviceAccountName: loxilb-ingress
       containers:
       - name: loxilb-ingress
+        volumeMounts:
+          - mountPath: "/opt/loxilb/cert/"
+            name: loxilb-ssl
         image: "ghcr.io/loxilb-io/loxilb-ingress:latest"
         imagePullPolicy: Always
         command: [ "/bin/loxilb-ingress" ]
@@ -262,3 +265,7 @@ spec:
           capabilities:
             add:
               - SYS_ADMIN
+      volumes:
+        - name: loxilb-ssl
+          secret:
+            secretName: loxilb-ssl

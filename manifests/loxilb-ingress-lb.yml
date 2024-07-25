@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: loxilb-ingress-manager
   namespace: kube-system
+  annotations:
+    loxilb.io/lbmode: "onearm"
 spec:
   externalTrafficPolicy: Local
   loadBalancerClass: loxilb.io/loxilb

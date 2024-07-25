@@ -38,6 +38,10 @@ metadata:
   name: site-loxilb-ingress
 spec:
   #ingressClassName: loxilb
+  tls:
+  - hosts:
+    - domain1.loxilb.io
+    secretName: loxilb-ssl
   rules:
   - host: domain1.loxilb.io
     http:
