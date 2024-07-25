@@ -30,7 +30,7 @@ const (
 func SpawnLoxiLB() {
 	for {
 
-		command := fmt.Sprintf("%s --blacklist=eth0", LoxiLBImg)
+		command := fmt.Sprintf("%s --proxyonlymode", LoxiLBImg)
 		cmd := exec.Command("bash", "-c", command)
 		klog.Infof("Spawning loxilb: %s", cmd)
 		err := cmd.Run()
