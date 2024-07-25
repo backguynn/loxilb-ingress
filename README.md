@@ -11,7 +11,7 @@ In Kubernetes, there is usually a lot of overlap between network load-balancer a
 
 When using Ingress, the clients connect to one of the pods through Ingress. The clients first perform a DNS lookup which returns IP address of the ingress. This IP address is usually funnelled through a L4 Load-balancer. The client sends a HTTP(s) request to Ingress specifying URL, hostname and other HTTP headers. Based on the HTTP payload, the ingress finds an associated Service and its EndPoint Objects. The Ingress then forwards the client's request to appopriate pod. It can also serve as HTTS termination point or as a mTLS hub.
 
-![image](https://github.com/user-attachments/assets/b8d0f0a0-c298-492e-8647-7c5936a87ea9)
+<img src="https://github.com/user-attachments/assets/b8d0f0a0-c298-492e-8647-7c5936a87ea9" width="500" >
 
 
 With Kubernetes ingress, we can expose multiple paths with the same service IP. This might be helpful if one is using public cloud, where one has to pay for managed LB services. Hence, creating a single service and exposing mulitple URL paths might be optimal in such use-cases.
@@ -39,6 +39,41 @@ kube-system   kube-loxilb-755f6fb85-gbg7f              1/1     Running   0      
 kube-system   local-path-provisioner-6f5d79df6-47n2b   1/1     Running   0          3h26m
 kube-system   metrics-server-54fd9b65b-b6c6x           1/1     Running   0          3h26m
 ```
+
+### Prepare TLS/SSL certificates for Ingress
+
+Self-signed TLS/SSL certificates and private keys can be built using various tools like [OpenSSL](https://www.openssl.org) or [Minica](https://github.com/jsha/minica). Basically, one will need to have two files -  server.crt and server.key  for loxilb-ingress usage. Once these files are in place, a Kubernetes secret can be created using the following yaml:
+```
+apiVersion: v1
+data:
+  server.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUI3RENDQVhPZ0F3SUJBZ0lJU.....
+  server.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JRzJBZ0VBTUJBR0J5cUdTTTQ5Q.....
+kind: Secret
+metadata:
+  creationTimestamp: null
+  name: loxilb-ssl
+  namespace: kube-system
+type: Opaque
+```
+
+Please note the above are just dummy values but they need to be in base64 format. How do you get the base64 values from server.crt and server.key files ?
+
+```
+$ base64 server.crt
+LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUI3RENDQVhPZ0F3SUJBZ0lJU.....
+$ base64 server.key
+LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JRzJBZ0VBTUJBR0J5cUdTTTQ5Q.....
+```
+
+After applying the yaml, we can check the created secret :
+```
+$ kubectl get secret -n kube-system loxilb-ssl
+NAME         TYPE     DATA   AGE
+loxilb-ssl   Opaque   2      106m
+```
+
+In the subsequent steps, this secret ```loxilb-ssl``` will be used throughout.
+
 
 ### Install loxilb-ingress
 
