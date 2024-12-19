@@ -68,7 +68,7 @@ func (r *LoxilbIngressReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	ingress := &netv1.Ingress{}
-	err = r.Client.Get(ctx, req.NamespacedName, ingress)
+	err = r.Get(ctx, req.NamespacedName, ingress)
 	if err != nil {
 		// Ingress is deleted.
 		if errors.IsNotFound(err) {
@@ -186,7 +186,7 @@ func (r *LoxilbIngressReconciler) createLoxiLoadBalancerEndpoints(ctx context.Co
 	}
 
 	ep := &corev1.Endpoints{}
-	if err := r.Client.Get(ctx, key, ep); err != nil {
+	if err := r.Get(ctx, key, ep); err != nil {
 		return loxilbEpList, err
 	}
 
@@ -285,7 +285,7 @@ func (r *LoxilbIngressReconciler) updateIngressStatus(ctx context.Context, ingre
 	}
 
 	svc := &corev1.Service{}
-	if err := r.Client.Get(ctx, lbSvcKey, svc); err != nil {
+	if err := r.Get(ctx, lbSvcKey, svc); err != nil {
 		return err
 	}
 
@@ -310,7 +310,7 @@ func (r *LoxilbIngressReconciler) updateIngressStatus(ctx context.Context, ingre
 		ingress.Status.LoadBalancer.Ingress = append(ingress.Status.LoadBalancer.Ingress, newIngressLoadBalancerIngress)
 	}
 
-	return r.Client.Status().Update(ctx, ingress)
+	return r.Status().Update(ctx, ingress)
 }
 
 func (r *LoxilbIngressReconciler) checkIngressLoadBalancerIngressExist(ingress *netv1.Ingress, serviceIngress corev1.LoadBalancerIngress) bool {
