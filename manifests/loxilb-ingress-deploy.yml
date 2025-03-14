@@ -115,6 +115,8 @@ spec:
     spec:
       #hostNetwork: true
       #dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        privileged: true
       serviceAccountName: loxilb-ingress
       containers:
       - name: loxilb-ingress

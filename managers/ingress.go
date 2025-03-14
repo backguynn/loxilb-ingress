@@ -19,11 +19,13 @@ package managers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -91,7 +93,13 @@ func (r *LoxilbIngressReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// when ingress is added, install rule to loxilb-ingress
-	models, err := r.createLoxiModelList(ctx, ingress)
+	var models []loxiapi.LoadBalancerModel
+	if _, isok := ingress.Annotations["loxilb.io/direct-loadbalance"]; isok {
+		models, err = r.createDirectLoxiModelList(ctx, ingress)
+	} else {
+		models, err = r.createLoxiModelList(ctx, ingress)
+	}
+
 	if err != nil {
 		if exist {
 			if err := r.LoxiClient.LoadBalancer().DeleteByName(ctx, ruleName); err == nil {
@@ -158,6 +166,19 @@ nextModel:
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
+func (r *LoxilbIngressReconciler) createDirectLoxiLoadBalancerService(ns, name, externalIP, protocol string, host string, port int32) loxiapi.LoadBalancerService {
+	service := loxiapi.LoadBalancerService{
+		ExternalIP: externalIP,
+		Protocol:   strings.ToLower(protocol),
+		Mode:       4, // fullproxy mode
+		Name:       fmt.Sprintf("%s_%s", ns, name),
+		Host:       host,
+		Port:       uint16(port),
+	}
+
+	return service
+}
+
 func (r *LoxilbIngressReconciler) createLoxiLoadBalancerService(ns, name, externalIP string, security int32, host string) loxiapi.LoadBalancerService {
 	service := loxiapi.LoadBalancerService{
 		ExternalIP: externalIP,
@@ -178,7 +199,39 @@ func (r *LoxilbIngressReconciler) createLoxiLoadBalancerService(ns, name, extern
 	return service
 }
 
-func (r *LoxilbIngressReconciler) createLoxiLoadBalancerEndpoints(ctx context.Context, ns, name string, port int32) ([]loxiapi.LoadBalancerEndpoint, error) {
+func (r *LoxilbIngressReconciler) createLoxiLoadBalancerEndpoints(ctx context.Context, ns, name string) ([]loxiapi.LoadBalancerEndpoint, error) {
+	loxilbEpList := make([]loxiapi.LoadBalancerEndpoint, 0)
+	key := types.NamespacedName{
+		Namespace: ns,
+		Name:      name,
+	}
+
+	ep := &corev1.Endpoints{}
+	if err := r.Get(ctx, key, ep); err != nil {
+		return loxilbEpList, err
+	}
+
+	for _, subset := range ep.Subsets {
+		for _, addr := range subset.Addresses {
+			for _, port := range subset.Ports {
+				loxilbEp := loxiapi.LoadBalancerEndpoint{
+					EndpointIP: addr.IP,
+					TargetPort: uint16(port.Port),
+					Weight:     uint8(1),
+				}
+				loxilbEpList = append(loxilbEpList, loxilbEp)
+			}
+		}
+	}
+
+	if len(loxilbEpList) <= 0 {
+		return loxilbEpList, fmt.Errorf("no endpoints have been added to the %s/%s service yet. please wait", ns, name)
+	}
+
+	return loxilbEpList, nil
+}
+
+func (r *LoxilbIngressReconciler) createLoxiLoadBalancerEndpointsWithTargetPort(ctx context.Context, ns, name string, targetPort int32) ([]loxiapi.LoadBalancerEndpoint, error) {
 	loxilbEpList := make([]loxiapi.LoadBalancerEndpoint, 0)
 	key := types.NamespacedName{
 		Namespace: ns,
@@ -194,7 +247,7 @@ func (r *LoxilbIngressReconciler) createLoxiLoadBalancerEndpoints(ctx context.Co
 		for _, addr := range subset.Addresses {
 			loxilbEp := loxiapi.LoadBalancerEndpoint{
 				EndpointIP: addr.IP,
-				TargetPort: uint16(port),
+				TargetPort: uint16(targetPort),
 				Weight:     uint8(1),
 			}
 			loxilbEpList = append(loxilbEpList, loxilbEp)
@@ -228,9 +281,54 @@ func (r *LoxilbIngressReconciler) getBackendServiceNamespace(ingress *netv1.Ingr
 	return ingress.Namespace
 }
 
+func (r *LoxilbIngressReconciler) createDirectLoxiModelList(ctx context.Context, ingress *netv1.Ingress) ([]loxiapi.LoadBalancerModel, error) {
+	svcName, isSvc := ingress.Annotations["loxilb.io/direct-loadbalance-service"]
+	if !isSvc {
+		return nil, fmt.Errorf("no service name is set in the ingress annotation for direct-loadbalance")
+	}
+
+	svcNs, isNs := ingress.Annotations["loxilb.io/direct-loadbalance-namespace"]
+	if !isNs {
+		svcNs = ingress.Namespace
+	}
+
+	svc := &corev1.Service{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: svcNs, Name: svcName}, svc); err != nil {
+		return nil, err
+	}
+
+	models := make([]loxiapi.LoadBalancerModel, 0)
+	lbName := ingress.Name
+	for _, port := range svc.Spec.Ports {
+		protocol := string(port.Protocol)
+		targetPortNum, err := r.GetServicePortIntValue(svc, port)
+		if err != nil {
+			return models, err
+		}
+		loxisvc := r.createDirectLoxiLoadBalancerService(svcNs, lbName, "0.0.0.0", protocol, "", port.Port)
+		loxiep, err := r.createLoxiLoadBalancerEndpointsWithTargetPort(ctx, svcNs, svcName, targetPortNum)
+		if err != nil {
+			return models, err
+		}
+
+		model := loxiapi.LoadBalancerModel{
+			Service:   loxisvc,
+			Endpoints: loxiep,
+		}
+		models = append(models, model)
+
+	}
+
+	return models, nil
+}
+
 func (r *LoxilbIngressReconciler) createLoxiModelList(ctx context.Context, ingress *netv1.Ingress) ([]loxiapi.LoadBalancerModel, error) {
 	models := make([]loxiapi.LoadBalancerModel, 0)
 	for _, rule := range ingress.Spec.Rules {
+		if rule.HTTP == nil {
+			continue
+		}
+
 		for _, path := range rule.HTTP.Paths {
 			if path.Backend.Service != nil {
 				name := path.Backend.Service.Name
@@ -246,7 +344,7 @@ func (r *LoxilbIngressReconciler) createLoxiModelList(ctx context.Context, ingre
 					lbName += "_https"
 				}
 				loxisvc := r.createLoxiLoadBalancerService(ingress.Namespace, lbName, r.LoxiClient.Host, security, rule.Host)
-				loxiep, err := r.createLoxiLoadBalancerEndpoints(ctx, ns, name, port)
+				loxiep, err := r.createLoxiLoadBalancerEndpointsWithTargetPort(ctx, ns, name, port)
 				if err != nil {
 					return models, err
 				}
@@ -328,6 +426,33 @@ func (r *LoxilbIngressReconciler) checkIngressLoadBalancerIngressExist(ingress *
 	}
 
 	return false
+}
+
+func (r *LoxilbIngressReconciler) GetServicePortIntValue(svc *corev1.Service, port corev1.ServicePort) (int32, error) {
+	if port.TargetPort.IntValue() != 0 {
+		return int32(port.TargetPort.IntValue()), nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	selectorLabel := labels.Set(svc.Spec.Selector).AsSelector()
+	podList := &corev1.PodList{}
+	if err := r.List(ctx, podList, client.MatchingLabelsSelector{Selector: selectorLabel}); err != nil {
+		return 0, err
+	}
+
+	for _, pod := range podList.Items {
+		for _, c := range pod.Spec.Containers {
+			for _, p := range c.Ports {
+				if p.Name == port.TargetPort.String() {
+					return p.ContainerPort, nil
+				}
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("not found port name %s in service %s", port.TargetPort.String(), svc.Name)
 }
 
 func (r *LoxilbIngressReconciler) SetupWithManager(mgr ctrl.Manager) error {
