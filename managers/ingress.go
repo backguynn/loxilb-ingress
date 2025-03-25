@@ -95,7 +95,7 @@ func (r *LoxilbIngressReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// when ingress is added, install rule to loxilb-ingress
 	var models []loxiapi.LoadBalancerModel
-	if _, isok := ingress.Annotations["loxilb.io/direct-loadbalance"]; isok {
+	if _, isok := ingress.Annotations["loxilb.io/direct-loadbalance-service"]; isok {
 		models, err = r.createDirectLoxiModelList(ctx, ingress)
 	} else {
 		models, err = r.createLoxiModelList(ctx, ingress)
